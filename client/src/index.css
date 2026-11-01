@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fffdf6;
+  --surface: #ffffff;
+  --text-primary: #343330;
+  --text-strong: #1b1b1b;
+  --text-secondary: #616161;
+  --brand-green: #32a749;
+  --brand-green-deep: #1f7a33;
+  --accent-lime: #f6ff7c;
+  --accent-blue: #daeff8;
+  --accent-peach: #ffedd5;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  @apply bg-cream text-charcoal font-sans;
+}
+
+h1,
+h2,
+h3 {
+  @apply font-medium text-charcoal;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+h1 {
+  @apply text-[34px] sm:text-[40px];
+}
+h2 {
+  @apply text-[24px] sm:text-[28px];
+}

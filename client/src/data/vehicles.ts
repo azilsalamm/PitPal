@@ -1,0 +1,31 @@
+/** Common makes/models in the UAE for the searchable comboboxes. */
+export const VEHICLE_MAKES: Record<string, string[]> = {
+  Toyota: ['Corolla', 'Camry', 'Land Cruiser', 'Prado', 'Yaris', 'Hilux', 'RAV4', 'FJ Cruiser', 'Avalon'],
+  Nissan: ['Patrol', 'Altima', 'Sunny', 'X-Trail', 'Pathfinder', 'Maxima', 'Sentra', 'Kicks', '240Z'],
+  Honda: ['Accord', 'Civic', 'CR-V', 'Pilot', 'City', 'Odyssey'],
+  Lexus: ['LX570', 'GX460', 'ES', 'IS', 'RX', 'LS'],
+  'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'G-Class', 'GLC', 'GLE', 'W123'],
+  BMW: ['3 Series', '5 Series', '7 Series', 'X3', 'X5', 'X6'],
+  Audi: ['A3', 'A4', 'A6', 'Q5', 'Q7'],
+  Volkswagen: ['Golf', 'Passat', 'Tiguan', 'Touareg', 'Jetta'],
+  Porsche: ['911', 'Cayenne', 'Macan', 'Panamera'],
+  Hyundai: ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Accent', 'Palisade'],
+  Kia: ['Sportage', 'Sorento', 'Optima', 'Cerato', 'Telluride', 'K5'],
+  Mitsubishi: ['Pajero', 'Lancer', 'Outlander', 'Montero Sport', 'Attrage'],
+  Ford: ['F-150', 'Explorer', 'Mustang', 'Expedition', 'Edge', 'Focus'],
+  Chevrolet: ['Tahoe', 'Suburban', 'Silverado', 'Malibu', 'Camaro', 'Captiva'],
+  GMC: ['Yukon', 'Sierra', 'Terrain', 'Acadia'],
+  Jeep: ['Wrangler', 'Grand Cherokee', 'Cherokee', 'Gladiator'],
+  'Land Rover': ['Defender', 'Range Rover', 'Discovery', 'Discovery Sport'],
+  Infiniti: ['QX80', 'QX60', 'Q50', 'Q60', 'QX50'],
+  Mazda: ['3', '6', 'CX-5', 'CX-9', 'MX-5'],
+  Suzuki: ['Jimny', 'Swift', 'Vitara', 'Baleno'],
+  Renault: ['Duster', 'Koleos', 'Megane', 'Symbol'],
+  Peugeot: ['3008', '5008', '208', '301', '508'],
+  Dodge: ['Charger', 'Challenger', 'Durango', 'Ram'],
+  Tesla: ['Model 3', 'Model Y', 'Model S', 'Model X'],
+  MG: ['ZS', 'HS', '5', 'RX5', 'MG6'],
+  Other: [],
+};
+
+export const MAKE_NAMES = Object.keys(VEHICLE_MAKES);

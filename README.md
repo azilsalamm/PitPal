@@ -1,57 +1,116 @@
 # PitPal
-PitPal AI helps car owners find the right garage by simply describing what is wrong with their car in normal language. K2 Horizon interprets the request, identifies urgency and required garage capabilities, and n8n orchestrates the matching workflow to return suitable garage options.
-# PitPal 🚗🔧
 
-**AI-powered garage matching for the UAE.** Describe your car problem in plain English — PitPal understands it and matches you to the right garage.
+Live: https://pitpal-uae.vercel.app
 
-Built for the n8n Dubai Hackathon with **n8n** (orchestration) + **K2 Horizon** (reasoning).
+The right garage for your car. Guided intake, eligibility-checked matching, and a
+fully local demo of the request → offer → confirmation flow.
 
-## The Problem
+## Getting started
 
-Finding the right garage in the UAE is guesswork. Drivers don't know if their issue is urgent, what kind of specialist they need, or which garage to trust. They describe problems in everyday language — *"my A/C isn't cooling"*, *"brakes feel soft and I'm driving to Abu Dhabi tonight"* — not in mechanic terms.
+```bash
+npm install
+npm run dev
+```
 
-## The Solution
+- Client (Vite): http://localhost:5173
+- Server (Express): http://localhost:8787 — e.g. `curl http://localhost:8787/api/status/integrations`
 
-The driver describes the problem naturally. **K2 Horizon is the reasoning brain** — it interprets the request, assesses urgency and safety, and ranks the best-fit garages. **n8n is pure orchestration** — it moves data between the input, the AI, and the response. No hardcoded matching logic; the intelligence lives in K2.
+## Scripts
 
-## How It Works
+- `npm run dev` — server (tsx watch) + client (vite) together
+- `npm run build` — build all workspaces
+- `npm run test` — vitest in `shared` (and `server`)
+- `npm run typecheck` — `tsc -b` across workspaces
+- `npm run lint` — eslint
 
-Driver input → n8n → K2 Horizon (interpret) → n8n → K2 Horizon (match & rank) → Result
+## Environment variables
 
+Copy `.env.example` to `.env`. All are optional; the app reports each
+integration as `configured` or `unavailable` at `/api/status/integrations`
+and at `/dev/integrations`.
 
-1. **Interpret** — K2 reads the free-text problem and extracts structured info: car make/model/year, issue category, urgency, a safety flag, location, and price/quality priority. If the input is too vague, K2 asks a clarifying question instead of guessing.
-2. **Match & rank** — K2 takes the structured request plus the garage list and returns the best matches with reasons and trade-offs, ordered by real suitability — not just proximity. If no garage fits, it says so with a cautious safety note instead of forcing a bad match.
+| Variable | Purpose |
+| --- | --- |
+| `geoapify_api_key` / `GEOAPIFY_API_KEY` | Live garage discovery (lowercase wins if both set) |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | Photo-assisted vehicle ID (default model `gemini-2.5-flash`) |
+| `CONTEXT_DEV_API_KEY` | Garage website enrichment |
 
-Everything in between — forms, HTTP calls, parsing, branching, formatting — is n8n.
+Keys are server-side only; they are never logged or sent to the client.
 
-## Why K2 Is Essential
+## Live vs demo
 
-Remove K2 and PitPal stops working. There's no keyword matching or lookup table — swap the entire garage list and it still works, because the reasoning is in the model, not the plumbing. **K2 reasons, n8n orchestrates.**
+Results default to live sources for everyone. `POST /api/places/search` returns
+Geoapify public listings (capability unconfirmed — no prices, availability, or
+PitPal enquiries); the radius starts at 15 km and widens (25 → 40 → emirate
+circle) until at least 5 garages are found, reporting `widened` and the actual
+`radiusKm`. `POST /api/directories/search` returns curated third-party garage
+directory listings extracted via Context.dev — unverified, services shown as
+free text ("Services as listed by the directory"), never capability claims.
+Directory listings that share a normalised name + emirate with a Geoapify
+listing merge into one card crediting both sources. Public listing detail pages
+offer "Check the garage's website" enrichment (Context.dev, fact-checked) or a
+web-search website finder when none is known. Demo mode runs entirely in the
+browser against fictional garages and is labelled as sample data throughout.
 
-## Two Interfaces
+### Directory sources
 
-| Interface | Endpoint |
-|-----------|----------|
-| **Web form** (no code) | `https://azilsalam.app.n8n.cloud/form/ac48ab87-07da-463e-bcb7-bc841d1375b7` |
-| **JSON API** | `POST https://azilsalam.app.n8n.cloud/webhook/pitpal` |
+`server/src/adapters/directories.ts` → `DIRECTORY_SOURCES`: Reach UAE,
+AWNIC premium garages, dubizzle Sharjah, Propertyfinder Abu Dhabi,
+dubizzle Dubai (yellowpages.ae is excluded — it returns no rows). The cache is
+warmed at server start and refreshed every 24 h; while a source warms, the
+route returns `pending: [sourceName]` and the client polls every 10 s. To add a
+source, append `{id, name, url, emirates?}` to `DIRECTORY_SOURCES` — rows are
+normalised (emirate match required, +971 phones, URL classification) and deduped
+by name + emirate. All directory data is third-party and unverified.
 
-**API request**
-```json
-{ "car_problem": "My 2019 Corolla needs an oil change, I'm in Deira, affordable, today" }
-API response
+## Vehicle catalog
 
-{
-  "match_status": "matched",
-  "customer_summary": "...",
-  "safety_note": "...",
-  "matches": [ { "garage_name": "...", "reason": "...", "fit": "strong", "tradeoff": "..." } ],
-  "clarification_question": null
-}
-Demo Scenarios
-Routine — "2019 Corolla, oil change, Deira, affordable, today" → budget general garage
-A/C — "2015 Corolla, A/C not cooling, Karama, budget" → A/C specialist
-SUV — "2022 Land Cruiser, suspension warning light, highway vibration" → 4x4/Toyota specialist
-Safety-critical — "Patrol, brake pedal feels soft, driving to Abu Dhabi tonight" → high urgency + safety caution
-Tech Stack
-n8n — form/webhook triggers, HTTP calls, parsing, branching
-K2 Horizon (IFM/K2-Horizon-375B-A23B) — the reasoning layer
+Make/model autocomplete is served by `GET /api/vehicles/makes` and
+`GET /api/vehicles/models?make=…`, backed by NHTSA vPIC (cached 7 days) filtered
+to a curated UAE-market allowlist, unioned with `adapters/uaeExtraModels.ts`
+and `server/data/uae-catalog.json` (generated by
+`npm run vehicles:refresh -w @pitpal/server`, which extracts makes/models from
+uae.yallamotor.com and dubicars.com via Context.dev). If vPIC is down the route
+serves the static list with `source: 'static'`; the client falls back to a small
+bundled list if the API is unreachable, and "Other / not listed" is always
+allowed.
+
+## Deploy (Vercel)
+
+The app deploys as a single Vercel project (`vercel.json` at the root): the
+client static build (`npm run build -w @pitpal/client` → `client/dist`) is the
+output, and the Express server is exposed as a serverless function at
+`/api/*` via `api/index.ts`, which re-exports the app from
+`server/src/index.ts` (it only calls `listen` when run directly — under Vercel
+it exports the handler). Rewrites send `/api/(.*)` to the function and
+everything else to the SPA `index.html`; the client uses relative `/api` URLs,
+so no client config is needed.
+
+Required env vars in the Vercel dashboard (Settings → Environment Variables):
+`GEOAPIFY_API_KEY`, `GEMINI_API_KEY`, `CONTEXT_DEV_API_KEY` — all optional at
+runtime (the app degrades honestly when absent, see `/dev/integrations`).
+
+Caveats: caches (places/directory/vehicle) are in-memory per serverless
+instance; the directory cache warms in the background on cold start and the
+route serves partial results with `pending` sources until ready (the client
+polls). `server/data/uae-catalog.json` is read from the deployed filesystem.
+The 24 h refresh interval is skipped on Vercel (`VERCEL=1`); warm-up repeats
+per cold instance instead.
+
+## Workspaces
+
+- `shared/` (`@pitpal/shared`) — zod models + pure logic: UAE time helpers,
+  eligibility, ranking, offer comparison, demo garages and demo-state reducer.
+  Consumed as TypeScript source (`main` → `src/index.ts`); Vite and tsx resolve
+  it directly, no build step needed for dev.
+- `server/` (`@pitpal/server`) — Express 4 + tsx, port 8787.
+- `client/` (`@pitpal/client`) — Vite + React 18 + Tailwind v3 + react-router 6,
+  port 5173, `/api` proxied to the server.
+
+Note: `npm run build` for the server emits JS that still imports
+`@pitpal/shared` from source — run it under `tsx` (as `npm start` does), or add a
+bundling step later.
+
+## n8n hackathon version
+
+The earlier n8n + K2 Horizon prototype is described in [docs/n8n-hackathon.md](docs/n8n-hackathon.md).
