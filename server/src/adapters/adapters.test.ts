@@ -85,6 +85,28 @@ describe('geoapify adapter', () => {
     expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
+  it('finds in-emirate garages beyond the first twenty places at a border', async () => {
+    const { searchPlaces } = await import('../routes/places.js');
+    const features = Array.from({ length: 50 }, (_, i) => ({
+      properties: { place_id: `border-${i}`, name: `Garage ${i}`, state: i < 20 ? 'Dubai' : 'Sharjah' },
+    }));
+    mockFetch.mockImplementation(async (url: string) => {
+      const params = new URL(url).searchParams;
+      const start = Number(params.get('offset'));
+      const limit = Number(params.get('limit'));
+      return jsonResponse({ features: features.slice(start, start + limit) });
+    });
+
+    const result = await searchPlaces({
+      emirate: 'sharjah', area: 'Al Nahda', coords: { lat: 25.31, lon: 55.38 }, travel: 'nearby',
+    });
+    expect(result).toMatchObject({
+      radiusKm: 15,
+      listings: features.slice(20, 40).map((f) => ({ providerId: f.properties.place_id, emirate: 'sharjah' })),
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('maps 401→PROVIDER_AUTH and 429→PROVIDER_QUOTA', async () => {
     const { searchGarages, ProviderError } = await import('./geoapify.js');
     mockFetch.mockResolvedValue(jsonResponse({}, 401));

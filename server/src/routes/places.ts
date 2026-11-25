@@ -15,6 +15,8 @@ export const placesRouter = Router();
 placesRouter.use(rateLimit('places', 120));
 
 const cache = new TtlCache<object>(10 * 60_000);
+const MAX_LISTINGS = 20;
+const SCOPED_CANDIDATE_LIMIT = 60;
 
 export const PlacesBody = z.object({
   emirate: Emirate,
@@ -120,15 +122,17 @@ export async function searchPlaces(
     const payload = await dedupe(cacheKey, async () => {
       let listings: Awaited<ReturnType<typeof searchGarages>> = [];
       let radiusKm = radiiKm[0];
+      const sameEmirateOnly = travel !== 'uae';
       for (const r of radiiKm) {
         radiusKm = r;
-        listings = await searchGarages({
+        const candidates = await searchGarages({
           centre: c,
           radiusM: r * 1000,
-          limit: 20,
+          limit: sameEmirateOnly ? SCOPED_CANDIDATE_LIMIT : MAX_LISTINGS,
           requestEmirate: emirate,
-          sameEmirateOnly: travel !== 'uae',
+          sameEmirateOnly,
         });
+        listings = candidates.slice(0, MAX_LISTINGS);
         if (listings.length >= 5) break;
       }
       const widened = radiusKm !== radiiKm[0];
@@ -142,7 +146,7 @@ export async function searchPlaces(
         : '';
       return {
         listings,
-        bounded: listings.length >= 20,
+        bounded: listings.length >= MAX_LISTINGS,
         coverageNote:
           `Public listings within ${radiusKm} km, centred on ${centreLabel}. Public listings are incomplete.` +
           widenNote +
