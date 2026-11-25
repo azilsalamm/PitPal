@@ -83,7 +83,9 @@ export function EstimatePanel({
       })
       .catch((e: unknown) => {
         if (!alive) return;
-        const msg = e instanceof ApiError ? e.message : 'The estimate could not be prepared right now.';
+        const msg = e instanceof ApiError && e.code !== 'PROVIDER_AUTH' && (e.status ?? 0) < 500
+          ? e.message
+          : 'Estimates are temporarily unavailable. Please try again later.';
         setState({ status: 'error', message: msg });
       });
     return () => {
@@ -113,7 +115,7 @@ export function EstimatePanel({
 
       {state.status === 'error' && (
         <p className="mt-3 text-sm text-danger" role="alert">
-          {state.message} You can still ask the garage directly below.
+          {state.message}
         </p>
       )}
 
