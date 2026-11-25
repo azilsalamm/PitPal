@@ -67,7 +67,7 @@ export default function Find() {
     (journey.step as 'A' | 'B' | 'C') ?? 'A',
   );
   const [photo, setPhoto] = useState<PhotoState>({ kind: 'idle' });
-  const [photoTouched, setPhotoTouched] = useState(false);
+  const photoTouched = useRef(false);
   const requestToken = useRef<string>('');
 
   const vehicle = journey.vehicle;
@@ -75,7 +75,7 @@ export default function Find() {
   const prefs = journey.prefs;
 
   const setVehicle = (patch: Partial<VehicleProfile>) => {
-    setPhotoTouched(true);
+    photoTouched.current = true;
     updateJourney({
       vehicle: {
         make: '',
@@ -105,7 +105,7 @@ export default function Find() {
   const modelOptions = useModels(vehicle?.make ?? '');
 
   async function onPhoto(file: File) {
-    setPhotoTouched(false);
+    photoTouched.current = false;
     const token = crypto.randomUUID();
     requestToken.current = token;
     try {
@@ -118,7 +118,11 @@ export default function Find() {
           { imageBase64: base64, mimeType: 'image/jpeg', requestToken: token },
         );
         // discard late/stale responses or fields the user already edited
-        if (res.requestToken !== requestToken.current || photoTouched) return;
+        if (res.requestToken !== requestToken.current) return;
+        if (photoTouched.current) {
+          setPhoto({ kind: 'idle' });
+          return;
+        }
         setPhoto({ kind: 'result', result: res.result, preview });
         const best = res.result.suggestions[0];
         if (
