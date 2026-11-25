@@ -15,6 +15,8 @@ export const placesRouter = Router();
 placesRouter.use(rateLimit('places', 120));
 
 const cache = new TtlCache<object>(10 * 60_000);
+const MAX_LISTINGS = 20;
+const SCOPED_CANDIDATE_LIMIT = 60;
 
 export const PlacesBody = z.object({
   emirate: Emirate,
@@ -110,7 +112,7 @@ export async function searchPlaces(
   radiiKm = [...new Set(radiiKm)].sort((a, b) => a - b);
 
   const c = centre!;
-  const cacheKey = `places:${c.lat.toFixed(2)},${c.lon.toFixed(2)}:${travel}`;
+  const cacheKey = `places:${emirate}:${c.lat.toFixed(2)},${c.lon.toFixed(2)}:${travel}`;
   const hit = cache.get(cacheKey);
   if (hit) {
     return hit as Record<string, unknown>;
@@ -120,14 +122,17 @@ export async function searchPlaces(
     const payload = await dedupe(cacheKey, async () => {
       let listings: Awaited<ReturnType<typeof searchGarages>> = [];
       let radiusKm = radiiKm[0];
+      const sameEmirateOnly = travel !== 'uae';
       for (const r of radiiKm) {
         radiusKm = r;
-        listings = await searchGarages({
+        const candidates = await searchGarages({
           centre: c,
           radiusM: r * 1000,
-          limit: 20,
+          limit: sameEmirateOnly ? SCOPED_CANDIDATE_LIMIT : MAX_LISTINGS,
           requestEmirate: emirate,
+          sameEmirateOnly,
         });
+        listings = candidates.slice(0, MAX_LISTINGS);
         if (listings.length >= 5) break;
       }
       const widened = radiusKm !== radiiKm[0];
@@ -135,13 +140,13 @@ export async function searchPlaces(
         travel === 'uae'
           ? ' The Places API has no country-wide search; this searches the same circle around ' +
             `${EMIRATE_LABEL[emirate]}.`
-          : '';
+          : ` Only listings in ${EMIRATE_LABEL[emirate]} are shown.`;
       const widenNote = widened
         ? ` Widened to ${radiusKm} km to find at least 5 garages.`
         : '';
       return {
         listings,
-        bounded: listings.length >= 20,
+        bounded: listings.length >= MAX_LISTINGS,
         coverageNote:
           `Public listings within ${radiusKm} km, centred on ${centreLabel}. Public listings are incomplete.` +
           widenNote +

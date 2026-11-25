@@ -64,6 +64,49 @@ describe('geoapify adapter', () => {
     expect(called.searchParams.get('bias')).toBe('proximity:55.2,25.1');
   });
 
+  it('scopes nearby searches by emirate before widening or reusing cached places', async () => {
+    const { searchPlaces } = await import('../routes/places.js');
+    const feature = (state: string | undefined, index: number) => ({
+      properties: { place_id: `${state}-${index}`, name: `Garage ${index}`, state },
+    });
+    const coords = { lat: 25.302, lon: 55.375 };
+    const dubai = Array.from({ length: 5 }, (_, i) => feature('Dubai', i));
+    const sharjah = Array.from({ length: 5 }, (_, i) => feature('Sharjah Emirate', i));
+    mockFetch.mockImplementation(async (url: string) => {
+      const wider = new URL(url).searchParams.get('filter')?.endsWith(',25000');
+      return jsonResponse({ features: [...dubai, ...sharjah.slice(0, wider ? 5 : 4), feature(undefined, 0)] });
+    });
+
+    const input = { area: 'Al Nahda', coords, travel: 'nearby' } as const;
+    const inDubai = await searchPlaces({ ...input, emirate: 'dubai' });
+    expect(inDubai).toMatchObject({ radiusKm: 15, listings: dubai.map(() => ({ emirate: 'dubai' })) });
+    const inSharjah = await searchPlaces({ ...input, emirate: 'sharjah' });
+    expect(inSharjah).toMatchObject({ radiusKm: 25, listings: sharjah.map(() => ({ emirate: 'sharjah' })) });
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('finds in-emirate garages beyond the first twenty places at a border', async () => {
+    const { searchPlaces } = await import('../routes/places.js');
+    const features = Array.from({ length: 50 }, (_, i) => ({
+      properties: { place_id: `border-${i}`, name: `Garage ${i}`, state: i < 20 ? 'Dubai' : 'Sharjah' },
+    }));
+    mockFetch.mockImplementation(async (url: string) => {
+      const params = new URL(url).searchParams;
+      const start = Number(params.get('offset'));
+      const limit = Number(params.get('limit'));
+      return jsonResponse({ features: features.slice(start, start + limit) });
+    });
+
+    const result = await searchPlaces({
+      emirate: 'sharjah', area: 'Al Nahda', coords: { lat: 25.31, lon: 55.38 }, travel: 'nearby',
+    });
+    expect(result).toMatchObject({
+      radiusKm: 15,
+      listings: features.slice(20, 40).map((f) => ({ providerId: f.properties.place_id, emirate: 'sharjah' })),
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('maps 401→PROVIDER_AUTH and 429→PROVIDER_QUOTA', async () => {
     const { searchGarages, ProviderError } = await import('./geoapify.js');
     mockFetch.mockResolvedValue(jsonResponse({}, 401));
