@@ -110,7 +110,7 @@ export async function searchPlaces(
   radiiKm = [...new Set(radiiKm)].sort((a, b) => a - b);
 
   const c = centre!;
-  const cacheKey = `places:${c.lat.toFixed(2)},${c.lon.toFixed(2)}:${travel}`;
+  const cacheKey = `places:${emirate}:${c.lat.toFixed(2)},${c.lon.toFixed(2)}:${travel}`;
   const hit = cache.get(cacheKey);
   if (hit) {
     return hit as Record<string, unknown>;
@@ -127,6 +127,7 @@ export async function searchPlaces(
           radiusM: r * 1000,
           limit: 20,
           requestEmirate: emirate,
+          sameEmirateOnly: travel !== 'uae',
         });
         if (listings.length >= 5) break;
       }
@@ -135,7 +136,7 @@ export async function searchPlaces(
         travel === 'uae'
           ? ' The Places API has no country-wide search; this searches the same circle around ' +
             `${EMIRATE_LABEL[emirate]}.`
-          : '';
+          : ` Only listings in ${EMIRATE_LABEL[emirate]} are shown.`;
       const widenNote = widened
         ? ` Widened to ${radiusKm} km to find at least 5 garages.`
         : '';

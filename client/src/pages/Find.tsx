@@ -69,6 +69,7 @@ export default function Find() {
   const [photo, setPhoto] = useState<PhotoState>({ kind: 'idle' });
   const [photoTouched, setPhotoTouched] = useState(false);
   const requestToken = useRef<string>('');
+  const locationRequest = useRef(0);
 
   const vehicle = journey.vehicle;
   const job = journey.job;
@@ -407,7 +408,10 @@ export default function Find() {
             id="emirate"
             className={inputClass}
             value={prefs?.emirate ?? 'dubai'}
-            onChange={(e) => setPrefs({ emirate: e.target.value as SearchPreferences['emirate'] })}
+            onChange={(e) => {
+              locationRequest.current += 1;
+              setPrefs({ emirate: e.target.value as SearchPreferences['emirate'], area: '', coords: undefined });
+            }}
           >
             {EMIRATES.filter((e) => !LIMITED.has(e.value)).map((e) => (
               <option key={e.value} value={e.value}>
@@ -445,10 +449,16 @@ export default function Find() {
           type="button"
           onClick={() => {
             if (!navigator.geolocation) return;
+            const request = ++locationRequest.current;
             navigator.geolocation.getCurrentPosition(
-              (pos) =>
-                setPrefs({ coords: { lat: pos.coords.latitude, lon: pos.coords.longitude } }),
-              () => setPrefs({ coords: undefined }),
+              (pos) => {
+                if (request === locationRequest.current) {
+                  setPrefs({ coords: { lat: pos.coords.latitude, lon: pos.coords.longitude } });
+                }
+              },
+              () => {
+                if (request === locationRequest.current) setPrefs({ coords: undefined });
+              },
             );
           }}
         >

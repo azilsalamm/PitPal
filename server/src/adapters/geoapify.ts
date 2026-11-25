@@ -66,8 +66,8 @@ const GeocodeResponse = z.object({
     .optional(),
 });
 
-function emirateFromState(state: string | undefined, fallback: Emirate): Emirate {
-  if (!state) return fallback;
+function emirateFromState(state: string | undefined): Emirate | undefined {
+  if (!state) return undefined;
   const s = state.toLowerCase();
   if (s.includes('dubai')) return 'dubai';
   if (s.includes('abu dhabi')) return 'abu_dhabi';
@@ -76,7 +76,7 @@ function emirateFromState(state: string | undefined, fallback: Emirate): Emirate
   if (s.includes('umm')) return 'umm_al_quwain';
   if (s.includes('ras')) return 'ras_al_khaimah';
   if (s.includes('fujairah')) return 'fujairah';
-  return fallback;
+  return undefined;
 }
 
 function safeHttp(u: unknown): string | undefined {
@@ -111,7 +111,7 @@ function mapFeature(
     providerId: p.place_id,
     source: { provider: 'geoapify', retrievedAt, attribution: ATTRIBUTION },
     name: p.name,
-    emirate: emirateFromState(p.state, requestEmirate),
+    emirate: emirateFromState(p.state) ?? requestEmirate,
     area: p.suburb ?? p.district ?? p.city ?? '',
     address: p.formatted ?? ([p.address_line1, p.address_line2].filter(Boolean).join(', ') || undefined),
     coords: lat != null && lon != null ? { lat, lon } : undefined,
@@ -181,8 +181,9 @@ export async function searchGarages(opts: {
   limit?: number;
   offset?: number;
   requestEmirate: Emirate;
+  sameEmirateOnly?: boolean;
 }): Promise<Garage[]> {
-  const { centre, radiusM, limit = 20, offset = 0, requestEmirate } = opts;
+  const { centre, radiusM, limit = 20, offset = 0, requestEmirate, sameEmirateOnly } = opts;
   const data = PlacesResponse.parse(
     await apiGet('/v2/places', {
       categories: 'service.vehicle.repair.car',
@@ -198,6 +199,7 @@ export async function searchGarages(opts: {
   for (const f of data.features) {
     if (seen.has(f.properties.place_id)) continue;
     seen.add(f.properties.place_id);
+    if (sameEmirateOnly && emirateFromState(f.properties.state) !== requestEmirate) continue;
     const cats = ((f.properties as Record<string, unknown>).categories as string[] | undefined) ?? [];
     if (cats.some((c) => EXCLUDE_CATEGORIES.test(c)) && !cats.some((c) => /repair/i.test(c))) continue;
     const g = mapFeature(f, requestEmirate, retrievedAt);
