@@ -15,6 +15,7 @@ import { PriceScopeTable } from '../components/PriceScopeTable';
 import { AVAILABILITY_LABELS, formatAed, formatDateTime, SERVICE_LABELS } from '../lib/format';
 import { getDirListing, getLiveListing } from '../lib/dirStore';
 import { ApiError, postJson } from '../lib/api';
+import { garageDirectionsUrl } from '../lib/directions';
 
 const EVIDENCE_LABELS: Record<EvidenceKind, string> = {
   website_listed: 'Listed on the garage’s website',
@@ -145,9 +146,7 @@ function PublicDetail({ g }: { g: Garage }) {
     { kind: 'idle' } | { kind: 'loading' } | { kind: 'done'; list: { url: string; title: string; matchedOn: string }[] } | { kind: 'error'; msg: string }
   >({ kind: 'idle' });
 
-  const mapsUrl = g.coords
-    ? `https://www.google.com/maps/dir/?api=1&destination=${g.coords.lat},${g.coords.lon}`
-    : `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${g.name} ${g.area}`)}`;
+  const mapsUrl = garageDirectionsUrl(g);
 
   const extract = async (url: string) => {
     setEnrich({ kind: 'loading' });
