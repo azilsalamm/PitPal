@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { garageDirectionsUrl } from '../src/lib/directions';
 
 const base = process.env.PITPAL_BASE ?? 'http://localhost:5173';
 const name = 'QA Auto & Repair';
 const address = '7 Street, Al Nahda, Sharjah, United Arab Emirates';
 
 async function main() {
+  for (const address of [undefined, '   ', ' qa auto & repair, ']) {
+    const maps = new URL(garageDirectionsUrl({ name, address, area: 'Al Nahda', emirate: 'sharjah' }));
+    assert.equal(maps.searchParams.get('destination'), `${name}, Al Nahda, sharjah, United Arab Emirates`);
+  }
+
   const browser = await chromium.launch({
     executablePath: process.env.CHROME_BIN ?? '/home/ubuntu/.local/bin/google-chrome',
     args: ['--no-sandbox'],
