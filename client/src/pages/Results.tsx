@@ -19,6 +19,7 @@ import { useAppState } from '../state/AppStateContext';
 import { Button, Card, StatusPill } from '../components/ui';
 import { PalAvatar } from '../components/pal/PalAvatar';
 import { ApiError, postJson } from '../lib/api';
+import { garageDirectionsUrl } from '../lib/directions';
 import { EstimatePanel, estimateMessage, type EstimateRequest } from '../components/EstimatePanel';
 
 interface GarageReview {
@@ -259,9 +260,7 @@ export default function Results() {
       g.coords && prefs.coords
         ? `≈ ${haversineKm(prefs.coords, g.coords).toFixed(1)} km, straight-line`
         : null;
-    const mapsUrl = g.coords
-      ? `https://www.google.com/maps/dir/?api=1&destination=${g.coords.lat},${g.coords.lon}`
-      : `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${g.name} ${g.area}`)}`;
+    const mapsUrl = garageDirectionsUrl(g);
     const hints = dir ? directoryHints(dir.listedServices, vehicle!.make, required) : null;
     const website = g.website ?? dir?.website;
     const phone = g.phone ?? dir?.phone;
