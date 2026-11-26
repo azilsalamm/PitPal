@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { GarageEnrichment } from '@pitpal/shared';
-import { generateJson } from './gemini.js';
+import { GEMINI_REQUEST_BUDGET_MS, generateJson } from './gemini.js';
 import { extractWebsite } from './contextdev.js';
 import { getContextDevKey } from '../config.js';
 import { TtlCache } from '../lib/cache.js';
@@ -131,6 +131,8 @@ function buildPrompt(input: EstimateInputT, enrichment: GarageEnrichment | null)
 export async function buildEstimate(
   input: EstimateInputT,
 ): Promise<{ estimate: EstimateT; enrichment: GarageEnrichment | null; generatedAt: string }> {
+  const startedAt = Date.now();
+  const deadline = startedAt + GEMINI_REQUEST_BUDGET_MS;
   const key = JSON.stringify(input);
   const hit = cache.get(key);
   if (hit) return { ...hit, generatedAt: new Date().toISOString() };
@@ -138,13 +140,13 @@ export async function buildEstimate(
   let enrichment: GarageEnrichment | null = null;
   if (input.garage.website && getContextDevKey()) {
     try {
-      enrichment = await extractWebsite(input.garage.website);
+      enrichment = await extractWebsite(input.garage.website, startedAt + 15_000);
     } catch {
       enrichment = null; // website unreadable — fall back to market-typical pricing
     }
   }
 
-  const raw = await generateJson('gemini_estimate', [{ text: buildPrompt(input, enrichment) }], RESPONSE_SCHEMA, 45_000);
+  const raw = await generateJson('gemini_estimate', [{ text: buildPrompt(input, enrichment) }], RESPONSE_SCHEMA, 45_000, deadline);
   const parsed = Estimate.safeParse(raw);
   if (!parsed.success) {
     recordError('gemini_estimate', 'PROVIDER_ERROR');

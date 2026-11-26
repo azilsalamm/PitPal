@@ -66,7 +66,7 @@ export function EstimatePanel({
   onEstimate: (e: EstimateResponse['estimate']) => void;
   onClose: () => void;
 }) {
-  const [state, setState] = useState<{ status: 'loading' } | { status: 'ok'; data: EstimateResponse } | { status: 'error'; message: string }>({
+  const [state, setState] = useState<{ status: 'loading' } | { status: 'ok'; data: EstimateResponse } | { status: 'error' | 'timeout'; message: string }>({
     status: 'loading',
   });
 
@@ -82,6 +82,10 @@ export function EstimatePanel({
         onEstimate(data.estimate);
       })
       .catch((e: unknown) => {
+        if (e instanceof ApiError && e.code === 'PROVIDER_TIMEOUT') {
+          if (alive) setState({ status: 'timeout', message: e.message });
+          return;
+        }
         if (!alive) return;
         const msg = e instanceof ApiError ? e.message : 'The estimate could not be prepared right now.';
         setState({ status: 'error', message: msg });
@@ -104,6 +108,10 @@ export function EstimatePanel({
           Close
         </Button>
       </div>
+
+      {state.status === 'timeout' && (
+        <p className="mt-3 text-sm text-danger" role="alert">{state.message}</p>
+      )}
 
       {state.status === 'loading' && (
         <p className="mt-3 text-sm text-muted">

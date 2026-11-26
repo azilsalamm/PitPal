@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { VisionResult, type VisionResult as VisionResultT } from '@pitpal/shared';
 import { getGeminiKey, getGeminiModel, getGeminiFallbackModels } from '../config.js';
-import { fetchWithTimeout, FetchTimeoutError } from '../lib/fetchWithTimeout.js';
+import { fetchJsonWithDeadline, FetchTimeoutError } from '../lib/fetchWithTimeout.js';
 import { recordError } from '../lib/lastError.js';
 import { ProviderError } from './geoapify.js';
 
@@ -46,12 +46,16 @@ const RESPONSE_SCHEMA = {
 
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
+export const GEMINI_REQUEST_BUDGET_MS = 50_000;
+export const GEMINI_TIMEOUT_MESSAGE = 'This is taking longer than usual. Please try again.';
+
 /** Call Gemini with a JSON response schema, falling back across models on quota/overload. */
 export async function generateJson(
   integration: string,
   parts: Part[],
   responseSchema: Record<string, unknown>,
   timeoutMs = 20_000,
+  deadline = Date.now() + GEMINI_REQUEST_BUDGET_MS,
 ): Promise<unknown> {
   const key = getGeminiKey();
   if (!key) {
@@ -63,19 +67,20 @@ export async function generateJson(
     contents: [{ role: 'user', parts }],
     generationConfig: { responseMimeType: 'application/json', responseSchema },
   };
-  let res: Response | undefined;
+  let res: Awaited<ReturnType<typeof fetchJsonWithDeadline>> | undefined;
   for (const model of models) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
     try {
-      res = await fetchWithTimeout(
+      res = await fetchJsonWithDeadline(
         url,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
         timeoutMs,
+        deadline,
       );
     } catch (e) {
       if (e instanceof FetchTimeoutError) {
         recordError(integration, 'PROVIDER_TIMEOUT');
-        throw new ProviderError('PROVIDER_TIMEOUT', 'The request timed out — please try again.', 504);
+        throw new ProviderError('PROVIDER_TIMEOUT', GEMINI_TIMEOUT_MESSAGE, 504);
       }
       recordError(integration, 'PROVIDER_ERROR');
       throw new ProviderError('PROVIDER_ERROR', 'Gemini could not be reached.', 502);
@@ -98,7 +103,7 @@ export async function generateJson(
     recordError(integration, 'PROVIDER_ERROR');
     throw new ProviderError('PROVIDER_ERROR', `Gemini request failed (${res.status}).`, 502);
   }
-  const json = GeminiResponse.parse(await res.json());
+  const json = GeminiResponse.parse(res.data);
   const text = json.candidates?.[0]?.content.parts.find((p) => p.text)?.text;
   if (!text) {
     recordError(integration, 'PROVIDER_ERROR');
