@@ -15,7 +15,15 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = realFetch;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
 });
+
+function waitForAbort(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -123,6 +131,105 @@ describe('gemini adapter', () => {
     await expect(identifyVehicle(jpeg, 'image/jpeg')).rejects.toMatchObject({
       code: 'PROVIDER_ERROR',
     });
+  });
+
+  it('shares the 50-second vision deadline across model fallback and retries', async () => {
+    const { identifyVehicle } = await import('./gemini.js');
+    vi.stubEnv('GEMINI_MODEL', 'test-primary');
+    vi.stubEnv('GEMINI_FALLBACK_MODELS', 'test-fallback');
+    vi.useFakeTimers();
+    const started = Date.now();
+    const calls: number[] = [];
+    mockFetch.mockImplementation(async (_url: string, { signal }: { signal: AbortSignal }) => {
+      calls.push(Date.now() - started);
+      if (calls.length === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 18_000));
+        return jsonResponse({}, 429);
+      }
+      return waitForAbort(signal);
+    });
+    const finished = expect(identifyVehicle(jpeg, 'image/jpeg')).rejects.toMatchObject({
+      status: 504, code: 'PROVIDER_TIMEOUT',
+    });
+    await vi.advanceTimersByTimeAsync(50_000);
+    await finished;
+    expect(calls).toEqual([0, 18_000, 38_000]);
+  });
+
+  it('does not retry a provider response when less than a second remains', async () => {
+    const { fetchJsonWithDeadline } = await import('../lib/fetchWithTimeout.js');
+    vi.useFakeTimers();
+    mockFetch.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return jsonResponse({}, 503);
+    });
+    const finished = expect(
+      fetchJsonWithDeadline('https://example.com', {}, 5_000, Date.now() + 1_500),
+    ).rejects.toMatchObject({ name: 'FetchTimeoutError' });
+    await vi.advanceTimersByTimeAsync(700);
+    await finished;
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('estimate deadline', () => {
+  it('retries website enrichment on the next identical estimate after a timeout', async () => {
+    const { buildEstimate } = await import('./estimate.js');
+    vi.stubEnv('CONTEXT_DEV_API_KEY', 'test-key');
+    vi.useFakeTimers();
+    const input = {
+      garage: { name: 'Cache test garage', emirate: 'dubai', website: 'https://example.com', listedServices: [] },
+      vehicle: { make: 'Toyota', model: 'Corolla' },
+      job: { category: 'service', service: 'routine_service', description: '' },
+    };
+    const estimate = {
+      summary: 'Routine service', items: [], totalLowAed: 100, totalHighAed: 150,
+      recommendedSpec: [], questionsForGarage: [], garageFitNotes: [], confidence: 'low',
+    };
+    const enrichmentResponse = {
+      status: 'ok', data: { publishedFees: [{ service: 'Routine service', amountAed: 120 }] },
+    };
+    let websiteAttempts = 0;
+    mockFetch.mockImplementation(async (url: string, { signal }: { signal: AbortSignal }) => {
+      if (new URL(url).hostname === 'api.context.dev') {
+        if (++websiteAttempts === 1) return waitForAbort(signal);
+        return jsonResponse(enrichmentResponse);
+      }
+      return jsonResponse({ candidates: [{ content: { parts: [{ text: JSON.stringify(estimate) }] } }] });
+    });
+
+    const first = buildEstimate(input);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await first).toMatchObject({ estimate, enrichment: null });
+    expect(await buildEstimate(input)).toMatchObject({
+      enrichment: { publishedFees: [{ service: 'Routine service', amountAed: 120 }] },
+    });
+    await buildEstimate(input);
+    expect(websiteAttempts).toBe(2);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('counts website enrichment and a stalled Gemini response body against the same budget', async () => {
+    const { buildEstimate } = await import('./estimate.js');
+    vi.useFakeTimers();
+    const started = Date.now();
+    const calls: Array<[string, number]> = [];
+    mockFetch.mockImplementation(async (url: string, { signal }: { signal: AbortSignal }) => {
+      const host = new URL(url).hostname;
+      calls.push([host, Date.now() - started]);
+      if (host === 'api.context.dev') return waitForAbort(signal);
+      return { ok: true, status: 200, json: () => waitForAbort(signal) };
+    });
+    const finished = expect(buildEstimate({
+      garage: { name: 'Fictional garage', emirate: 'dubai', website: 'https://example.com', listedServices: [] },
+      vehicle: { make: 'Toyota', model: 'Corolla' },
+      job: { category: 'service', service: 'routine_service', description: '' },
+    })).rejects.toMatchObject({
+      status: 504, code: 'PROVIDER_TIMEOUT', message: 'This is taking longer than usual. Please try again.',
+    });
+    await vi.advanceTimersByTimeAsync(50_000);
+    await finished;
+    expect(calls).toEqual([['api.context.dev', 0], ['generativelanguage.googleapis.com', 15_000]]);
   });
 });
 

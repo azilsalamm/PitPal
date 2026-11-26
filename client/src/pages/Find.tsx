@@ -150,9 +150,11 @@ export default function Find() {
             kind: 'error',
             preview,
             message:
-              e instanceof ApiError && e.code === 'NOT_FOUND'
-                ? "Automatic identification isn't connected in this environment. Enter the details manually."
-                : 'The photo could not be checked — enter the details manually or try again.',
+              e instanceof ApiError && e.code === 'PROVIDER_TIMEOUT'
+                ? e.message
+                : e instanceof ApiError && e.code === 'NOT_FOUND'
+                  ? "Automatic identification isn't connected in this environment. Enter the details manually."
+                  : 'The photo could not be checked — enter the details manually or try again.',
           });
         }
       }

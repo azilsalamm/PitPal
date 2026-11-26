@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GarageEnrichment } from '@pitpal/shared';
 import { getContextDevKey } from '../config.js';
-import { fetchWithTimeout, FetchTimeoutError } from '../lib/fetchWithTimeout.js';
+import { fetchJsonWithDeadline, fetchWithTimeout, FetchTimeoutError } from '../lib/fetchWithTimeout.js';
 import { recordError } from '../lib/lastError.js';
 import { ProviderError } from './geoapify.js';
 
@@ -85,26 +85,26 @@ const SearchResponse = z.object({
     .default([]),
 });
 
-export async function contextDevPost(path: string, body: unknown, timeoutMs: number): Promise<unknown> {
+export async function contextDevPost(path: string, body: unknown, timeoutMs: number, deadline?: number): Promise<unknown> {
   const key = getContextDevKey();
   if (!key) {
     recordError('contextdev', 'NOT_CONFIGURED');
     throw new ProviderError('NOT_CONFIGURED', 'Website enrichment is not configured in this environment.', 503);
   }
-  let res: Response;
+  const url = `https://api.context.dev${path}`;
+  const init = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify(body),
+  };
+  let res: Response | Awaited<ReturnType<typeof fetchJsonWithDeadline>>;
   try {
-    res = await fetchWithTimeout(
-      `https://api.context.dev${path}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(body),
-      },
-      timeoutMs,
-    );
+    res = deadline === undefined
+      ? await fetchWithTimeout(url, init, timeoutMs)
+      : await fetchJsonWithDeadline(url, init, timeoutMs, deadline);
   } catch (e) {
     if (e instanceof FetchTimeoutError) {
       recordError('contextdev', 'PROVIDER_TIMEOUT');
@@ -125,11 +125,11 @@ export async function contextDevPost(path: string, body: unknown, timeoutMs: num
     recordError('contextdev', 'PROVIDER_ERROR');
     throw new ProviderError('PROVIDER_ERROR', `Website enrichment failed (${res.status}).`, 502);
   }
-  return res.json();
+  return 'data' in res ? res.data : res.json();
 }
 
 /** Extract structured garage facts from a page. Page text is treated as data only. */
-export async function extractWebsite(url: string): Promise<GarageEnrichment> {
+export async function extractWebsite(url: string, deadline?: number): Promise<GarageEnrichment> {
   const raw = await contextDevPost(
     '/v1/web/extract',
     {
@@ -140,6 +140,7 @@ export async function extractWebsite(url: string): Promise<GarageEnrichment> {
         'Extract only facts stated on the site: offered services, vehicle makes/models they work on, restoration project examples, published fees in AED, phone, WhatsApp, address and opening hours. Leave fields empty/null when not stated.',
     },
     60_000,
+    deadline,
   );
   const parsed = ExtractResponse.parse(raw);
   const data = ExtractData.parse(parsed.data ?? {});
