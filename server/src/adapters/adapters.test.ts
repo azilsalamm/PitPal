@@ -173,6 +173,42 @@ describe('gemini adapter', () => {
 });
 
 describe('estimate deadline', () => {
+  it('retries website enrichment on the next identical estimate after a timeout', async () => {
+    const { buildEstimate } = await import('./estimate.js');
+    vi.stubEnv('CONTEXT_DEV_API_KEY', 'test-key');
+    vi.useFakeTimers();
+    const input = {
+      garage: { name: 'Cache test garage', emirate: 'dubai', website: 'https://example.com', listedServices: [] },
+      vehicle: { make: 'Toyota', model: 'Corolla' },
+      job: { category: 'service', service: 'routine_service', description: '' },
+    };
+    const estimate = {
+      summary: 'Routine service', items: [], totalLowAed: 100, totalHighAed: 150,
+      recommendedSpec: [], questionsForGarage: [], garageFitNotes: [], confidence: 'low',
+    };
+    const enrichmentResponse = {
+      status: 'ok', data: { publishedFees: [{ service: 'Routine service', amountAed: 120 }] },
+    };
+    let websiteAttempts = 0;
+    mockFetch.mockImplementation(async (url: string, { signal }: { signal: AbortSignal }) => {
+      if (new URL(url).hostname === 'api.context.dev') {
+        if (++websiteAttempts === 1) return waitForAbort(signal);
+        return jsonResponse(enrichmentResponse);
+      }
+      return jsonResponse({ candidates: [{ content: { parts: [{ text: JSON.stringify(estimate) }] } }] });
+    });
+
+    const first = buildEstimate(input);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await first).toMatchObject({ estimate, enrichment: null });
+    expect(await buildEstimate(input)).toMatchObject({
+      enrichment: { publishedFees: [{ service: 'Routine service', amountAed: 120 }] },
+    });
+    await buildEstimate(input);
+    expect(websiteAttempts).toBe(2);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
   it('counts website enrichment and a stalled Gemini response body against the same budget', async () => {
     const { buildEstimate } = await import('./estimate.js');
     vi.useFakeTimers();

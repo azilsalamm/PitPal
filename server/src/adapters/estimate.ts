@@ -138,11 +138,12 @@ export async function buildEstimate(
   if (hit) return { ...hit, generatedAt: new Date().toISOString() };
 
   let enrichment: GarageEnrichment | null = null;
+  let enrichmentTimedOut = false;
   if (input.garage.website && getContextDevKey()) {
     try {
       enrichment = await extractWebsite(input.garage.website, startedAt + 15_000);
-    } catch {
-      enrichment = null; // website unreadable — fall back to market-typical pricing
+    } catch (e) {
+      enrichmentTimedOut = e instanceof ProviderError && e.code === 'PROVIDER_TIMEOUT';
     }
   }
 
@@ -153,6 +154,6 @@ export async function buildEstimate(
     throw new ProviderError('PROVIDER_ERROR', 'The estimate came back in an unexpected shape.', 502);
   }
   const result = { estimate: parsed.data, enrichment };
-  cache.set(key, result);
+  if (!enrichmentTimedOut) cache.set(key, result);
   return { ...result, generatedAt: new Date().toISOString() };
 }
