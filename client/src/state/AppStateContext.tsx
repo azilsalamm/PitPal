@@ -47,7 +47,7 @@ function loadJourney(): Journey {
 function journeyReducer(state: Journey, action: JourneyAction): Journey {
   switch (action.type) {
     case 'patch':
-      return { ...state, ...action.patch };
+      return { ...state, ...(action.patch.vehicle && { yearFromPhoto: false }), ...action.patch };
     case 'reset':
       return {};
   }
