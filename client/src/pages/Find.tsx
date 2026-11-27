@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  suggestedVehicleYear,
   type VisionResult,
   type JobCategory,
   type JobRequest,
@@ -135,7 +136,7 @@ export default function Find() {
               year:
                 vehicle?.year !== undefined && vehicle?.year !== 'unknown'
                   ? vehicle.year
-                  : 'unknown',
+                  : suggestedVehicleYear(best),
               source: 'photo_confirmed',
               chassisCode: vehicle?.chassisCode,
             },
@@ -237,7 +238,7 @@ export default function Find() {
                             vehicle: {
                               make: s.make,
                               model: s.model,
-                              year: s.yearFrom ?? 'unknown',
+                              year: suggestedVehicleYear(s),
                               source: 'photo_confirmed',
                               chassisCode: vehicle?.chassisCode,
                             },
