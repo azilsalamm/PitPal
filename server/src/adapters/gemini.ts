@@ -5,7 +5,7 @@ import { fetchWithTimeout, FetchTimeoutError } from '../lib/fetchWithTimeout.js'
 import { recordError } from '../lib/lastError.js';
 import { ProviderError } from './geoapify.js';
 
-const PROMPT = `Identify the vehicle's make, model and generation year range from visible exterior cues only (badges, body shape, lights, grille). Do not read licence plates or identify people. Do not infer condition, trim, fuel type, or an exact year. If the image is unclear or shows multiple vehicles, say so. Provide up to 3 suggestions, best first.`;
+const PROMPT = `Identify the vehicle's make, model and likely year range from visible exterior cues only (badges, body shape, lights, grille). Use yearFrom and yearTo for the same generation or facelift that the note describes. If the visible cues support a facelift, use that facelift's years rather than the broader generation's years. If you cannot identify a range, set both years to null. Do not read licence plates or identify people. Do not infer condition, trim, fuel type, or an exact year. If the image is unclear or shows multiple vehicles, say so. Provide up to 3 suggestions, best first.`;
 
 const GeminiResponse = z.object({
   candidates: z
