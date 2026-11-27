@@ -11,9 +11,14 @@ describe('suggestedVehicleYear', () => {
     [2018, 2018, 'medium', 'unknown'],
     [2018, 2018, 'low', 'unknown'],
     [2018, 2018, 'high', 2018],
+    [1968, 1968, 'high', 1968],
+    [2027, 2027, 'high', 2027],
+    [1967, 1967, 'high', 'unknown'],
+    [2028, 2028, 'high', 'unknown'],
   ] as const)('maps %s–%s (%s confidence) to %s', (yearFrom, yearTo, confidence, expected) => {
     const suggestion: VisionSuggestion = { make: 'Nissan', model: 'Patrol', note: '', yearFrom, yearTo, confidence };
-    expect(suggestedVehicleYear(suggestion)).toBe(expected);
+    const availableYears = Array.from({ length: 60 }, (_, i) => 2027 - i);
+    expect(suggestedVehicleYear(suggestion, availableYears)).toBe(expected);
   });
 });
 

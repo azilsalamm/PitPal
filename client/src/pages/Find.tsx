@@ -137,7 +137,7 @@ export default function Find() {
           const keepManualYear = vehicle?.year !== undefined && vehicle.year !== 'unknown' && !journey.yearFromPhoto;
           const year = keepManualYear
             ? vehicle.year
-            : make === best.make && model === best.model ? suggestedVehicleYear(best) : 'unknown';
+            : make === best.make && model === best.model ? suggestedVehicleYear(best, years) : 'unknown';
           updateJourney({
             vehicle: {
               make,
@@ -241,7 +241,7 @@ export default function Find() {
                         type="button"
                         className="underline text-primary-deep"
                         onClick={() => {
-                          const year = suggestedVehicleYear(s);
+                          const year = suggestedVehicleYear(s, years);
                           updateJourney({
                             vehicle: {
                               make: s.make,
