@@ -23,6 +23,7 @@ import {
 
 export interface Journey {
   vehicle?: VehicleProfile;
+  yearFromPhoto?: boolean;
   job?: JobRequest;
   prefs?: SearchPreferences;
   step?: string;

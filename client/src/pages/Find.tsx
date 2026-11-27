@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   suggestedVehicleYear,
+  yearAfterVehicleEdit,
   type VisionResult,
   type JobCategory,
   type JobRequest,
@@ -77,15 +78,17 @@ export default function Find() {
 
   const setVehicle = (patch: Partial<VehicleProfile>) => {
     setPhotoTouched(true);
+    const { year, yearFromPhoto } = yearAfterVehicleEdit(vehicle, patch, journey.yearFromPhoto);
     updateJourney({
       vehicle: {
         make: '',
         model: '',
-        year: 'unknown',
         source: 'manual',
         ...vehicle,
         ...patch,
+        year,
       },
+      yearFromPhoto,
     });
   };
   const setJob = (patch: Partial<JobRequest>) =>
@@ -129,17 +132,21 @@ export default function Find() {
           best.confidence !== 'low'
         ) {
           // single confident suggestion → auto-fill, still editable
+          const make = vehicle?.make || best.make;
+          const model = vehicle?.model || best.model;
+          const keepManualYear = vehicle?.year !== undefined && vehicle.year !== 'unknown' && !journey.yearFromPhoto;
+          const year = keepManualYear
+            ? vehicle.year
+            : make === best.make && model === best.model ? suggestedVehicleYear(best) : 'unknown';
           updateJourney({
             vehicle: {
-              make: vehicle?.make || best.make,
-              model: vehicle?.model || best.model,
-              year:
-                vehicle?.year !== undefined && vehicle?.year !== 'unknown'
-                  ? vehicle.year
-                  : suggestedVehicleYear(best),
+              make,
+              model,
+              year,
               source: 'photo_confirmed',
               chassisCode: vehicle?.chassisCode,
             },
+            yearFromPhoto: !keepManualYear && year !== 'unknown',
           });
         }
       } catch (e) {
@@ -233,17 +240,19 @@ export default function Find() {
                       <button
                         type="button"
                         className="underline text-primary-deep"
-                        onClick={() =>
+                        onClick={() => {
+                          const year = suggestedVehicleYear(s);
                           updateJourney({
                             vehicle: {
                               make: s.make,
                               model: s.model,
-                              year: suggestedVehicleYear(s),
+                              year,
                               source: 'photo_confirmed',
                               chassisCode: vehicle?.chassisCode,
                             },
-                          })
-                        }
+                            yearFromPhoto: year !== 'unknown',
+                          });
+                        }}
                       >
                         {s.make} {s.model}
                         {s.yearFrom ? ` ${s.yearFrom}${s.yearTo && s.yearTo !== s.yearFrom ? `–${s.yearTo}` : ''}` : ''}
