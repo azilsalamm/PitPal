@@ -76,7 +76,13 @@ export default function Find() {
   const job = journey.job;
   const prefs = journey.prefs;
 
-  const vehicleEdit = (patch: Partial<VehicleProfile>) => {
+  const setVehicle = (patch: Partial<VehicleProfile>) => {
+    setPhotoTouched(true);
+    updateJourney({
+      ...vehicleEdit(patch),
+    });
+  };
+  function vehicleEdit(patch: Partial<VehicleProfile>) {
     const { year, yearFromPhoto } = yearAfterVehicleEdit(vehicle, patch, journey.yearFromPhoto);
     return {
       vehicle: {
@@ -89,13 +95,7 @@ export default function Find() {
       },
       yearFromPhoto,
     };
-  };
-  const setVehicle = (patch: Partial<VehicleProfile>) => {
-    setPhotoTouched(true);
-    updateJourney({
-      ...vehicleEdit(patch),
-    });
-  };
+  }
   const setJob = (patch: Partial<JobRequest>) =>
     updateJourney({ job: { category: 'repair', ...job, ...patch } });
   const setPrefs = (patch: Partial<SearchPreferences>) =>
