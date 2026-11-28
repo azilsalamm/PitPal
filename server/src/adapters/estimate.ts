@@ -48,6 +48,7 @@ export const Estimate = z.object({
   ),
   totalLowAed: z.number(),
   totalHighAed: z.number(),
+  recommendedSpec: z.array(z.string()),
   questionsForGarage: z.array(z.string()),
   garageFitNotes: z.array(z.string()),
   confidence: z.enum(['high', 'medium', 'low']),
@@ -62,7 +63,7 @@ export const Estimate = z.object({
       ...pricing,
     };
   }),
-  recommendedSpec: [] as string[],
+  recommendedSpec: estimate.recommendedSpec.filter((text) => !hasTechnicalAdvice(text)),
   questionsForGarage: estimate.questionsForGarage.filter((text) => !hasTechnicalAdvice(text)),
   garageFitNotes: estimate.garageFitNotes.filter((text) => !hasTechnicalAdvice(text)),
 }));
@@ -89,6 +90,7 @@ const RESPONSE_SCHEMA = {
     },
     totalLowAed: { type: 'number' },
     totalHighAed: { type: 'number' },
+    recommendedSpec: { type: 'array', items: { type: 'string' }, maxItems: 6 },
     questionsForGarage: { type: 'array', items: { type: 'string' }, maxItems: 5 },
     garageFitNotes: { type: 'array', items: { type: 'string' }, maxItems: 4 },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
@@ -98,6 +100,7 @@ const RESPONSE_SCHEMA = {
     'items',
     'totalLowAed',
     'totalHighAed',
+    'recommendedSpec',
     'questionsForGarage',
     'garageFitNotes',
     'confidence',

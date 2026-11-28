@@ -354,8 +354,10 @@ describe('vehicles adapter', () => {
 
 describe('estimate adapter', () => {
   it('requests pricing, not technical advice, and strips leaked specs without changing prices', async () => {
-    const { buildEstimate } = await import('./estimate.js');
+    const { buildEstimate, Estimate } = await import('./estimate.js');
     const advice = 'Top up DOT 4 brake fluid if the level rises during piston retraction.';
+    const flaggedSpecs = [advice, '6.7 to 7.0 litres of engine oil', 'Drain plug: 30 N·m'];
+    const safeSpecs = ['Engine oil (manufacturer-spec quantity)', 'OEM or equivalent oil filter'];
     const items = [
       { item: 'Engine oil (7L)', detail: 'Fill with 6.7 to 7.0 litres.', lowAed: 210, highAed: 350, basis: 'uae_market_typical' },
       { item: 'Oil filter', detail: 'OEM or quality aftermarket', lowAed: 45, highAed: 85, basis: 'garage_website' },
@@ -366,7 +368,7 @@ describe('estimate adapter', () => {
       items,
       totalLowAed: 305,
       totalHighAed: 535,
-      recommendedSpec: [advice],
+      recommendedSpec: [safeSpecs[0], ...flaggedSpecs, safeSpecs[1]],
       questionsForGarage: ['What warranty is included?', 'Should I top up the fluid?'],
       garageFitNotes: ['Independent workshop', 'Uses 12 lb-ft for the drain plug.'],
       confidence: 'medium',
@@ -385,7 +387,7 @@ describe('estimate adapter', () => {
     expect(prompt).toContain('Engine oil (manufacturer-spec quantity)');
     expect(prompt).toContain('Do not give exact fluid capacities, torque specifications or procedural maintenance instructions in any field');
     expect(prompt).toContain('Totals must equal the sums of item lows/highs');
-    expect(request.generationConfig.responseSchema.properties).not.toHaveProperty('recommendedSpec');
+    expect(request.generationConfig.responseSchema.required).toContain('recommendedSpec');
     expect(estimate).toEqual({
       ...modelResult,
       summary: 'Indicative parts and labour estimate.',
@@ -394,11 +396,12 @@ describe('estimate adapter', () => {
         items[1],
         { ...items[2], detail: '' },
       ],
-      recommendedSpec: [],
+      recommendedSpec: safeSpecs,
       questionsForGarage: ['What warranty is included?'],
       garageFitNotes: ['Independent workshop'],
     });
     expect(estimate.totalLowAed).toBe(estimate.items.reduce((sum, item) => sum + item.lowAed, 0));
     expect(estimate.totalHighAed).toBe(estimate.items.reduce((sum, item) => sum + item.highAed, 0));
+    expect(Estimate.parse({ ...modelResult, recommendedSpec: flaggedSpecs }).recommendedSpec).toEqual([]);
   });
 });
