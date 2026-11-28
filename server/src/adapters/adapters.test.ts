@@ -359,6 +359,8 @@ describe('estimate adapter', () => {
     const flaggedSpecs = [
       advice, '6.7 to 7.0 litres of engine oil', 'Drain plug: 30 N·m',
       'Fill with manufacturer-approved fluid.', 'Top up if the fluid is low.',
+      'R-134a: 550 g', 'Refrigerant charge: 500 to 550 grams',
+      'Use 0W-20 engine oil.', 'SAE 30 engine oil.',
     ];
     const safeSpecs = ['Engine oil (manufacturer-spec quantity)', 'Torque converter repair', 'Refrigerant top-up'];
     const items = [

@@ -29,10 +29,14 @@ export const EstimateInput = z.object({
 export type EstimateInputT = z.infer<typeof EstimateInput>;
 
 const fluidQuantity = /\b\d+(?:[.,]\d+)?(?:\s*(?:[-–—]|to)\s*\d+(?:[.,]\d+)?)?\s*(?:m?l|millilit(?:re|er)s?|lit(?:re|er)s?|quarts?|qts?|gallons?|gal|fl\.?\s*oz)\b/i;
+const gramQuantity = /\b\d+(?:[.,]\d+)?\s*(?:g|grams?)\b/i;
+const refrigerant = /\b(?:refrigerant|charg(?:e|ing)|r[-\s]?(?:134a|1234yf|12|744))\b/i;
+const oilGrade = /\b(?:\d{1,2}\s*w\s*[-–—/]?\s*\d{1,2}|sae\s+\d{1,2})\b/i;
 const torqueValue = /\b\d+(?:[.,]\d+)?\s*(?:n[\s·⋅.-]*m|newton[\s-]*met(?:re|er)s?|(?:lb(?:s|f)?[\s·⋅.-]*ft|ft[\s·⋅.-]*lb(?:s|f)?))\b/i;
 const maintenanceProcedure = /\b(?:top\s+up\s+(?:if|when|until|to|the|your|(?:dot\s*\d(?:\.\d)?\s+)?(?:brake\s+)?fluid|refrigerant)|fill\s+(?:(?:the\s+)?(?:reservoir|system)\s+)?with|(?:torque|tighten)\s+(?:the|to|(?:wheel\s+)?(?:bolts|nuts))|retract\s+(?:the\s+)?pistons?|bleed\s+(?:the\s+|your\s+)?brakes?|step[\s-]*\d+)\b/i;
 const hasTechnicalAdvice = (text: string) =>
-  fluidQuantity.test(text) || torqueValue.test(text) || maintenanceProcedure.test(text);
+  fluidQuantity.test(text) || (gramQuantity.test(text) && refrigerant.test(text)) ||
+  oilGrade.test(text) || torqueValue.test(text) || maintenanceProcedure.test(text);
 
 export const Estimate = z.object({
   summary: z.string(),
