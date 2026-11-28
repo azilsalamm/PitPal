@@ -131,8 +131,8 @@ export function EstimatePanel({
               </tr>
             </thead>
             <tbody>
-              {state.data.estimate.items.map((i, index) => (
-                <tr key={index} className="border-t border-borderc/60 align-top">
+              {state.data.estimate.items.map((i) => (
+                <tr key={i.item} className="border-t border-borderc/60 align-top">
                   <td className="py-2 pr-2">
                     <div className="font-medium">
                       {i.item}{' '}

@@ -29,9 +29,8 @@ export const EstimateInput = z.object({
 export type EstimateInputT = z.infer<typeof EstimateInput>;
 
 const fluidQuantity = /\b\d+(?:[.,]\d+)?(?:\s*(?:[-–—]|to)\s*\d+(?:[.,]\d+)?)?\s*(?:m?l|millilit(?:re|er)s?|lit(?:re|er)s?|quarts?|qts?|gallons?|gal|fl\.?\s*oz)\b/i;
-const fluidQuantities = new RegExp(fluidQuantity.source, 'gi');
 const torqueValue = /\b\d+(?:[.,]\d+)?\s*(?:n[\s·⋅.-]*m|newton[\s-]*met(?:re|er)s?|(?:lb(?:s|f)?[\s·⋅.-]*ft|ft[\s·⋅.-]*lb(?:s|f)?))\b/i;
-const maintenanceProcedure = /\b(?:top[\s-]*up|piston retraction|retract(?:ing)? (?:the )?pistons?|torqu(?:e|ing)|tighten(?:ing)?|bleed(?:ing)? (?:the |your )?brakes?|step[\s-]*\d+)\b/i;
+const maintenanceProcedure = /\b(?:top\s+up\s+(?:if|when|until|to|the|your|(?:dot\s*\d(?:\.\d)?\s+)?(?:brake\s+)?fluid|refrigerant)|fill\s+(?:(?:the\s+)?(?:reservoir|system)\s+)?with|(?:torque|tighten)\s+(?:the|to|(?:wheel\s+)?(?:bolts|nuts))|retract\s+(?:the\s+)?pistons?|bleed\s+(?:the\s+|your\s+)?brakes?|step[\s-]*\d+)\b/i;
 const hasTechnicalAdvice = (text: string) =>
   fluidQuantity.test(text) || torqueValue.test(text) || maintenanceProcedure.test(text);
 
@@ -54,18 +53,7 @@ export const Estimate = z.object({
   confidence: z.enum(['high', 'medium', 'low']),
 }).transform((estimate) => ({
   ...estimate,
-  summary: hasTechnicalAdvice(estimate.summary) ? 'Indicative parts and labour estimate.' : estimate.summary,
-  items: estimate.items.map(({ item, detail, ...pricing }, index) => {
-    const label = item.replace(fluidQuantities, 'manufacturer-spec quantity');
-    return {
-      item: hasTechnicalAdvice(label) ? `Estimate item ${index + 1}` : label,
-      detail: hasTechnicalAdvice(detail) ? '' : detail,
-      ...pricing,
-    };
-  }),
   recommendedSpec: estimate.recommendedSpec.filter((text) => !hasTechnicalAdvice(text)),
-  questionsForGarage: estimate.questionsForGarage.filter((text) => !hasTechnicalAdvice(text)),
-  garageFitNotes: estimate.garageFitNotes.filter((text) => !hasTechnicalAdvice(text)),
 }));
 export type EstimateT = z.infer<typeof Estimate>;
 

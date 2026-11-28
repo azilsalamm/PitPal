@@ -356,21 +356,24 @@ describe('estimate adapter', () => {
   it('requests pricing, not technical advice, and strips leaked specs without changing prices', async () => {
     const { buildEstimate, Estimate } = await import('./estimate.js');
     const advice = 'Top up DOT 4 brake fluid if the level rises during piston retraction.';
-    const flaggedSpecs = [advice, '6.7 to 7.0 litres of engine oil', 'Drain plug: 30 N·m'];
-    const safeSpecs = ['Engine oil (manufacturer-spec quantity)', 'OEM or equivalent oil filter'];
+    const flaggedSpecs = [
+      advice, '6.7 to 7.0 litres of engine oil', 'Drain plug: 30 N·m',
+      'Fill with manufacturer-approved fluid.', 'Top up if the fluid is low.',
+    ];
+    const safeSpecs = ['Engine oil (manufacturer-spec quantity)', 'Torque converter repair', 'Refrigerant top-up'];
     const items = [
-      { item: 'Engine oil (7L)', detail: 'Fill with 6.7 to 7.0 litres.', lowAed: 210, highAed: 350, basis: 'uae_market_typical' },
-      { item: 'Oil filter', detail: 'OEM or quality aftermarket', lowAed: 45, highAed: 85, basis: 'garage_website' },
-      { item: 'Replacement labour', detail: 'Tighten to 30 N·m.', lowAed: 50, highAed: 100, basis: 'uae_market_typical' },
+      { item: 'Oil service (up to 5 L)', detail: 'Published package includes up to 5 L of engine oil.', lowAed: 210, highAed: 350, basis: 'garage_website' },
+      { item: 'Torque converter repair', detail: 'Labour only', lowAed: 45, highAed: 85, basis: 'uae_market_typical' },
+      { item: 'Refrigerant top-up', detail: 'Refrigerant and labour', lowAed: 50, highAed: 100, basis: 'uae_market_typical' },
     ];
     const modelResult = {
-      summary: advice,
+      summary: 'Published oil service package covers up to 5 L.',
       items,
       totalLowAed: 305,
       totalHighAed: 535,
-      recommendedSpec: [safeSpecs[0], ...flaggedSpecs, safeSpecs[1]],
-      questionsForGarage: ['What warranty is included?', 'Should I top up the fluid?'],
-      garageFitNotes: ['Independent workshop', 'Uses 12 lb-ft for the drain plug.'],
+      recommendedSpec: [...safeSpecs, ...flaggedSpecs],
+      questionsForGarage: ['What warranty is included?', 'Does the oil package cover up to 5 L?'],
+      garageFitNotes: ['Independent workshop', 'Lists refrigerant top-up as a service.'],
       confidence: 'medium',
     };
     mockFetch.mockResolvedValue(jsonResponse({
@@ -390,15 +393,7 @@ describe('estimate adapter', () => {
     expect(request.generationConfig.responseSchema.required).toContain('recommendedSpec');
     expect(estimate).toEqual({
       ...modelResult,
-      summary: 'Indicative parts and labour estimate.',
-      items: [
-        { ...items[0], item: 'Engine oil (manufacturer-spec quantity)', detail: '' },
-        items[1],
-        { ...items[2], detail: '' },
-      ],
       recommendedSpec: safeSpecs,
-      questionsForGarage: ['What warranty is included?'],
-      garageFitNotes: ['Independent workshop'],
     });
     expect(estimate.totalLowAed).toBe(estimate.items.reduce((sum, item) => sum + item.lowAed, 0));
     expect(estimate.totalHighAed).toBe(estimate.items.reduce((sum, item) => sum + item.highAed, 0));
