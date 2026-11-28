@@ -351,3 +351,56 @@ describe('vehicles adapter', () => {
     expect(md.models.map((m) => m.name)).toContain('Patrol');
   });
 });
+
+describe('estimate adapter', () => {
+  it('requests pricing, not technical advice, and strips leaked specs without changing prices', async () => {
+    const { buildEstimate, Estimate } = await import('./estimate.js');
+    const advice = 'Top up DOT 4 brake fluid if the level rises during piston retraction.';
+    const flaggedSpecs = [
+      advice, '6.7 to 7.0 litres of engine oil', 'Drain plug: 30 N·m',
+      'Fill with manufacturer-approved fluid.', 'Top up if the fluid is low.',
+      'DOT 4 brake fluid top-up if fluid level rises/adjusts during piston retraction',
+      'Topup if the fluid is low.',
+      'R-134a: 550 g', 'Refrigerant charge: 500 to 550 grams',
+      'Use 0W-20 engine oil.', 'SAE 30 engine oil.',
+    ];
+    const safeSpecs = ['Engine oil (manufacturer-spec quantity)', 'Torque converter repair', 'Refrigerant top-up'];
+    const items = [
+      { item: 'Oil service (up to 5 L)', detail: 'Published package includes up to 5 L of engine oil.', lowAed: 210, highAed: 350, basis: 'garage_website' },
+      { item: 'Torque converter repair', detail: 'Labour only', lowAed: 45, highAed: 85, basis: 'uae_market_typical' },
+      { item: 'Refrigerant top-up', detail: 'Refrigerant and labour', lowAed: 50, highAed: 100, basis: 'uae_market_typical' },
+    ];
+    const modelResult = {
+      summary: 'Published oil service package covers up to 5 L.',
+      items,
+      totalLowAed: 305,
+      totalHighAed: 535,
+      recommendedSpec: [...safeSpecs, ...flaggedSpecs],
+      questionsForGarage: ['What warranty is included?', 'Does the oil package cover up to 5 L?'],
+      garageFitNotes: ['Independent workshop', 'Lists refrigerant top-up as a service.'],
+      confidence: 'medium',
+    };
+    mockFetch.mockResolvedValue(jsonResponse({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(modelResult) }] } }],
+    }));
+    const { estimate } = await buildEstimate({
+      garage: { name: 'Estimate test garage', emirate: 'sharjah', listedServices: [] },
+      vehicle: { make: 'Toyota', model: 'Land Cruiser', year: 2021 },
+      job: { category: 'service', service: 'routine_service', description: 'Oil and filter change.' },
+    });
+
+    const request = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const prompt = request.contents[0].parts[0].text;
+    expect(prompt).toContain('Engine oil (manufacturer-spec quantity)');
+    expect(prompt).toContain('Do not give exact fluid capacities, torque specifications or procedural maintenance instructions in any field');
+    expect(prompt).toContain('Totals must equal the sums of item lows/highs');
+    expect(request.generationConfig.responseSchema.required).toContain('recommendedSpec');
+    expect(estimate).toEqual({
+      ...modelResult,
+      recommendedSpec: safeSpecs,
+    });
+    expect(estimate.totalLowAed).toBe(estimate.items.reduce((sum, item) => sum + item.lowAed, 0));
+    expect(estimate.totalHighAed).toBe(estimate.items.reduce((sum, item) => sum + item.highAed, 0));
+    expect(Estimate.parse({ ...modelResult, recommendedSpec: flaggedSpecs }).recommendedSpec).toEqual([]);
+  });
+});

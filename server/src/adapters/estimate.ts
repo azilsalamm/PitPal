@@ -28,6 +28,16 @@ export const EstimateInput = z.object({
 });
 export type EstimateInputT = z.infer<typeof EstimateInput>;
 
+const fluidQuantity = /\b\d+(?:[.,]\d+)?(?:\s*(?:[-–—]|to)\s*\d+(?:[.,]\d+)?)?\s*(?:m?l|millilit(?:re|er)s?|lit(?:re|er)s?|quarts?|qts?|gallons?|gal|fl\.?\s*oz)\b/i;
+const gramQuantity = /\b\d+(?:[.,]\d+)?\s*(?:g|grams?)\b/i;
+const refrigerant = /\b(?:refrigerant|charg(?:e|ing)|r[-\s]?(?:134a|1234yf|12|744))\b/i;
+const oilGrade = /\b(?:\d{1,2}\s*w\s*[-–—/]?\s*\d{1,2}|sae\s+\d{1,2})\b/i;
+const torqueValue = /\b\d+(?:[.,]\d+)?\s*(?:n[\s·⋅.-]*m|newton[\s-]*met(?:re|er)s?|(?:lb(?:s|f)?[\s·⋅.-]*ft|ft[\s·⋅.-]*lb(?:s|f)?))\b/i;
+const maintenanceProcedure = /\b(?:top(?:-|\s*)up\s+(?:if|when|until|to|the|your|(?:dot\s*\d(?:\.\d)?\s+)?(?:brake\s+)?fluid|refrigerant)|fill\s+(?:(?:the\s+)?(?:reservoir|system)\s+)?with|(?:torque|tighten)\s+(?:the|to|(?:wheel\s+)?(?:bolts|nuts))|retract\s+(?:the\s+)?pistons?|bleed\s+(?:the\s+|your\s+)?brakes?|step[\s-]*\d+)\b/i;
+const hasTechnicalAdvice = (text: string) =>
+  fluidQuantity.test(text) || (gramQuantity.test(text) && refrigerant.test(text)) ||
+  oilGrade.test(text) || torqueValue.test(text) || maintenanceProcedure.test(text);
+
 export const Estimate = z.object({
   summary: z.string(),
   items: z.array(
@@ -45,7 +55,10 @@ export const Estimate = z.object({
   questionsForGarage: z.array(z.string()),
   garageFitNotes: z.array(z.string()),
   confidence: z.enum(['high', 'medium', 'low']),
-});
+}).transform((estimate) => ({
+  ...estimate,
+  recommendedSpec: estimate.recommendedSpec.filter((text) => !hasTechnicalAdvice(text)),
+}));
 export type EstimateT = z.infer<typeof Estimate>;
 
 const RESPONSE_SCHEMA = {
@@ -116,7 +129,8 @@ function buildPrompt(input: EstimateInputT, enrichment: GarageEnrichment | null)
     `Vehicle: ${v}.`,
     `Job requested: ${job}.`,
     `Rules:`,
-    `- Itemise parts, consumables and labour. For each item give the specific spec that suits this exact vehicle (e.g. engine oil grade/viscosity and quality tier such as fully synthetic 5W-30 meeting the manufacturer approval, oil capacity in litres, filter type, brake pad material, coolant type). Include an "OEM vs quality aftermarket" option where relevant.`,
+    `- Itemise parts, consumables and labour as cost categories, not technical recommendations. Use generic scope descriptions, e.g. "Engine oil (manufacturer-spec quantity)", "Oil filter", and "Oil and filter replacement labour". Include an "OEM vs quality aftermarket" option where relevant.`,
+    `- Do not give exact fluid capacities, torque specifications or procedural maintenance instructions in any field, even if provided in the job description or website facts. Leave technical specifications and procedures to the garage using the manufacturer's service information.`,
     `- Use the garage's published fee for an item when one exists and mark basis "garage_website"; otherwise use typical ${new Date().getFullYear()} UAE independent-garage prices (not dealer prices) and mark "uae_market_typical".`,
     `- Give realistic low/high ranges. Totals must equal the sums of item lows/highs.`,
     `- garageFitNotes: brief notes on how well this garage fits the job and car based ONLY on the facts above (say "not stated" rather than inventing).`,
