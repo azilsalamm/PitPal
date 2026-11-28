@@ -28,6 +28,13 @@ export const EstimateInput = z.object({
 });
 export type EstimateInputT = z.infer<typeof EstimateInput>;
 
+const fluidQuantity = /\b\d+(?:[.,]\d+)?(?:\s*(?:[-–—]|to)\s*\d+(?:[.,]\d+)?)?\s*(?:m?l|millilit(?:re|er)s?|lit(?:re|er)s?|quarts?|qts?|gallons?|gal|fl\.?\s*oz)\b/i;
+const fluidQuantities = new RegExp(fluidQuantity.source, 'gi');
+const torqueValue = /\b\d+(?:[.,]\d+)?\s*(?:n[\s·⋅.-]*m|newton[\s-]*met(?:re|er)s?|(?:lb(?:s|f)?[\s·⋅.-]*ft|ft[\s·⋅.-]*lb(?:s|f)?))\b/i;
+const maintenanceProcedure = /\b(?:top[\s-]*up|piston retraction|retract(?:ing)? (?:the )?pistons?|torqu(?:e|ing)|tighten(?:ing)?|bleed(?:ing)? (?:the |your )?brakes?|step[\s-]*\d+)\b/i;
+const hasTechnicalAdvice = (text: string) =>
+  fluidQuantity.test(text) || torqueValue.test(text) || maintenanceProcedure.test(text);
+
 export const Estimate = z.object({
   summary: z.string(),
   items: z.array(
@@ -41,11 +48,24 @@ export const Estimate = z.object({
   ),
   totalLowAed: z.number(),
   totalHighAed: z.number(),
-  recommendedSpec: z.array(z.string()),
   questionsForGarage: z.array(z.string()),
   garageFitNotes: z.array(z.string()),
   confidence: z.enum(['high', 'medium', 'low']),
-});
+}).transform((estimate) => ({
+  ...estimate,
+  summary: hasTechnicalAdvice(estimate.summary) ? 'Indicative parts and labour estimate.' : estimate.summary,
+  items: estimate.items.map(({ item, detail, ...pricing }, index) => {
+    const label = item.replace(fluidQuantities, 'manufacturer-spec quantity');
+    return {
+      item: hasTechnicalAdvice(label) ? `Estimate item ${index + 1}` : label,
+      detail: hasTechnicalAdvice(detail) ? '' : detail,
+      ...pricing,
+    };
+  }),
+  recommendedSpec: [] as string[],
+  questionsForGarage: estimate.questionsForGarage.filter((text) => !hasTechnicalAdvice(text)),
+  garageFitNotes: estimate.garageFitNotes.filter((text) => !hasTechnicalAdvice(text)),
+}));
 export type EstimateT = z.infer<typeof Estimate>;
 
 const RESPONSE_SCHEMA = {
@@ -69,7 +89,6 @@ const RESPONSE_SCHEMA = {
     },
     totalLowAed: { type: 'number' },
     totalHighAed: { type: 'number' },
-    recommendedSpec: { type: 'array', items: { type: 'string' }, maxItems: 6 },
     questionsForGarage: { type: 'array', items: { type: 'string' }, maxItems: 5 },
     garageFitNotes: { type: 'array', items: { type: 'string' }, maxItems: 4 },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
@@ -79,7 +98,6 @@ const RESPONSE_SCHEMA = {
     'items',
     'totalLowAed',
     'totalHighAed',
-    'recommendedSpec',
     'questionsForGarage',
     'garageFitNotes',
     'confidence',
@@ -116,7 +134,8 @@ function buildPrompt(input: EstimateInputT, enrichment: GarageEnrichment | null)
     `Vehicle: ${v}.`,
     `Job requested: ${job}.`,
     `Rules:`,
-    `- Itemise parts, consumables and labour. For each item give the specific spec that suits this exact vehicle (e.g. engine oil grade/viscosity and quality tier such as fully synthetic 5W-30 meeting the manufacturer approval, oil capacity in litres, filter type, brake pad material, coolant type). Include an "OEM vs quality aftermarket" option where relevant.`,
+    `- Itemise parts, consumables and labour as cost categories, not technical recommendations. Use generic scope descriptions, e.g. "Engine oil (manufacturer-spec quantity)", "Oil filter", and "Oil and filter replacement labour". Include an "OEM vs quality aftermarket" option where relevant.`,
+    `- Do not give exact fluid capacities, torque specifications or procedural maintenance instructions in any field, even if provided in the job description or website facts. Leave technical specifications and procedures to the garage using the manufacturer's service information.`,
     `- Use the garage's published fee for an item when one exists and mark basis "garage_website"; otherwise use typical ${new Date().getFullYear()} UAE independent-garage prices (not dealer prices) and mark "uae_market_typical".`,
     `- Give realistic low/high ranges. Totals must equal the sums of item lows/highs.`,
     `- garageFitNotes: brief notes on how well this garage fits the job and car based ONLY on the facts above (say "not stated" rather than inventing).`,

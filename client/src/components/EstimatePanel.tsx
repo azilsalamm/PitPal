@@ -28,7 +28,6 @@ interface EstimateResponse {
     items: EstimateItem[];
     totalLowAed: number;
     totalHighAed: number;
-    recommendedSpec: string[];
     questionsForGarage: string[];
     garageFitNotes: string[];
     confidence: 'high' | 'medium' | 'low';
@@ -131,8 +130,8 @@ export function EstimatePanel({
               </tr>
             </thead>
             <tbody>
-              {state.data.estimate.items.map((i) => (
-                <tr key={i.item} className="border-t border-borderc/60 align-top">
+              {state.data.estimate.items.map((i, index) => (
+                <tr key={index} className="border-t border-borderc/60 align-top">
                   <td className="py-2 pr-2">
                     <div className="font-medium">
                       {i.item}{' '}
@@ -147,14 +146,6 @@ export function EstimatePanel({
               ))}
             </tbody>
           </table>
-          {state.data.estimate.recommendedSpec.length > 0 && (
-            <div>
-              <p className="font-semibold">What your car needs</p>
-              <ul className="list-disc pl-5">
-                {state.data.estimate.recommendedSpec.map((s) => <li key={s}>{s}</li>)}
-              </ul>
-            </div>
-          )}
           {state.data.estimate.garageFitNotes.length > 0 && (
             <div>
               <p className="font-semibold">Why this garage</p>

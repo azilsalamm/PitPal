@@ -351,3 +351,54 @@ describe('vehicles adapter', () => {
     expect(md.models.map((m) => m.name)).toContain('Patrol');
   });
 });
+
+describe('estimate adapter', () => {
+  it('requests pricing, not technical advice, and strips leaked specs without changing prices', async () => {
+    const { buildEstimate } = await import('./estimate.js');
+    const advice = 'Top up DOT 4 brake fluid if the level rises during piston retraction.';
+    const items = [
+      { item: 'Engine oil (7L)', detail: 'Fill with 6.7 to 7.0 litres.', lowAed: 210, highAed: 350, basis: 'uae_market_typical' },
+      { item: 'Oil filter', detail: 'OEM or quality aftermarket', lowAed: 45, highAed: 85, basis: 'garage_website' },
+      { item: 'Replacement labour', detail: 'Tighten to 30 N·m.', lowAed: 50, highAed: 100, basis: 'uae_market_typical' },
+    ];
+    const modelResult = {
+      summary: advice,
+      items,
+      totalLowAed: 305,
+      totalHighAed: 535,
+      recommendedSpec: [advice],
+      questionsForGarage: ['What warranty is included?', 'Should I top up the fluid?'],
+      garageFitNotes: ['Independent workshop', 'Uses 12 lb-ft for the drain plug.'],
+      confidence: 'medium',
+    };
+    mockFetch.mockResolvedValue(jsonResponse({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(modelResult) }] } }],
+    }));
+    const { estimate } = await buildEstimate({
+      garage: { name: 'Estimate test garage', emirate: 'sharjah', listedServices: [] },
+      vehicle: { make: 'Toyota', model: 'Land Cruiser', year: 2021 },
+      job: { category: 'service', service: 'routine_service', description: 'Oil and filter change.' },
+    });
+
+    const request = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const prompt = request.contents[0].parts[0].text;
+    expect(prompt).toContain('Engine oil (manufacturer-spec quantity)');
+    expect(prompt).toContain('Do not give exact fluid capacities, torque specifications or procedural maintenance instructions in any field');
+    expect(prompt).toContain('Totals must equal the sums of item lows/highs');
+    expect(request.generationConfig.responseSchema.properties).not.toHaveProperty('recommendedSpec');
+    expect(estimate).toEqual({
+      ...modelResult,
+      summary: 'Indicative parts and labour estimate.',
+      items: [
+        { ...items[0], item: 'Engine oil (manufacturer-spec quantity)', detail: '' },
+        items[1],
+        { ...items[2], detail: '' },
+      ],
+      recommendedSpec: [],
+      questionsForGarage: ['What warranty is included?'],
+      garageFitNotes: ['Independent workshop'],
+    });
+    expect(estimate.totalLowAed).toBe(estimate.items.reduce((sum, item) => sum + item.lowAed, 0));
+    expect(estimate.totalHighAed).toBe(estimate.items.reduce((sum, item) => sum + item.highAed, 0));
+  });
+});
